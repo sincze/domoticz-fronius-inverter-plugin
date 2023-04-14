@@ -1,9 +1,40 @@
-#           Fronius Inverter Plugin
-#
-#           Author:     ADJ, 2018
-#
-"""
-<plugin key="froniusInverter" name="Fronius Inverter" author="ADJ" version="0.0.1" wikilink="https://github.com/aukedejong/domoticz-fronius-inverter-plugin.git" externallink="http://www.fronius.com">
+########################################################################################
+# 	Fronius Inverter Python Plugin for Domoticz                                   	   #
+#                                                                                      #
+# 	MIT License                                                                        #
+#                                                                                      #
+#	Copyright (c) 2018 ADJ                                                             #
+#                                                                                      #
+#	Permission is hereby granted, free of charge, to any person obtaining a copy       #
+#	of this software and associated documentation files (the "Software"), to deal      #
+#	in the Software without restriction, including without limitation the rights       #
+#	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell          #
+#	copies of the Software, and to permit persons to whom the Software is              #
+#	furnished to do so, subject to the following conditions:                           #
+#                                                                                      #
+#	The above copyright notice and this permission notice shall be included in all     #
+#	copies or substantial portions of the Software.                                    #
+#                                                                                      #
+#	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR         #
+#	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,           #
+#	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE        #
+#	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER             #
+#	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,      #
+#	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE      #
+#	SOFTWARE.                                                                          #
+#                                                                                      #
+#   Author: ADJ / sincze                                                               #
+#                                                                                      #
+#   This plugin will read the status from the running inverter via the webservice.     #
+#                                                                                      #
+#   V 0.0.1. ADJ Initial Release (2018),                                               #
+#            https://github.com/aukedejong/domoticz-fronius-inverter-plugin.git        #
+#   V 0.0.2. S. Incze (14-04-2023),                                                    #            
+#            Fix crashing issues during nighttime                                      #
+########################################################################################
+
+"0000000000000000000000000000000000000000000000000000000000000000000000""
+<plugin key="froniusInverter" name="Fronius Inverter" author="ADJ & SINCZE" version="0.0.2" wikilink="https://github.com/aukedejong/domoticz-fronius-inverter-plugin.git" externallink="http://www.fronius.com">
     <params>
         <param field="Mode1" label="IP Address" required="true" width="200px" />
         <param field="Mode2" label="Device ID" required="true" width="100px" />
@@ -28,9 +59,8 @@ class BasePlugin:
     inverterWorking = True
     intervalCounter = None
     heartbeat = 30
-    previousTotalWh = 0
-    previousCurrentWatt = 0
-    whFraction = 0
+    totalWh = 0
+    currentWatts = 0
 
     def onStart(self):
         if Parameters["Mode6"] != "Normal":
@@ -51,11 +81,8 @@ class BasePlugin:
         Devices[2].Update(0, sValue=str(Devices[2].sValue), Image=Images["FroniusInverter"].ID)
         return True
 
-
     def onHeartbeat(self):
-
         if self.intervalCounter == 1:
-
             ipAddress = Parameters["Mode1"]
             deviceId = Parameters["Mode2"]
             jsonObject = self.getInverterRealtimeData( ipAddress, deviceId )
@@ -70,24 +97,21 @@ class BasePlugin:
 
             else:
                 self.logErrorCode(jsonObject)
+                self.logErrorCode2(jsonObject)
 
                 if (self.inverterWorking == True):
                     self.inverterWorking = False
                     self.updateDeviceOff()
 
-
             self.intervalCounter = 0
 
         else:
             self.intervalCounter = 1
-            #logDebugMessage("Do nothing: " + str(self.intervalCounter))
-
+            logDebugMessage("Do nothing: " + str(self.intervalCounter))
 
         return True
 
-
     def getInverterRealtimeData(self, ipAddress, deviceId):
-
         url = "http://" + ipAddress + "/solar_api/v1/GetInverterRealtimeData.cgi?Scope=Device&DeviceId=" + deviceId + "&DataCollection=CommonInverterData"
         logDebugMessage('Retrieve solar data from ' + url)
 
@@ -99,63 +123,78 @@ class BasePlugin:
             logErrorMessage("Error: " + str(e) + " URL: " + url)
             return
 
-        #logDebugMessage("JSON: " + str(jsonData))
+        logDebugMessage("JSON: " + str(jsonData))
 
         return jsonObject
 
-
-
     def isInverterActive(self, jsonObject):
-
-        return jsonObject["Head"]["Status"]["Code"] == 0
-
+        try:
+            logDebugMessage("Debug isInverterActive: " + json.dumps(jsonObject))
+            if (jsonObject["Head"]["Status"]["Code"] == 0):                         # When JSON returns during night
+                logDebugMessage("isInverterActive: True")
+                return True
+            else:
+                logDebugMessage("isInverterActive: False")
+                return False
+        except:
+            logErrorMessage("Error isInverterActive: Inverter is not Active")
+            return False
 
     def logErrorCode(self, jsonObject):
+        try:
+            code = jsonObject["Head"]["Status"]["Code"]
+            reason = jsonObject["Head"]["Status"]["Reason"]
 
-        code = jsonObject["Head"]["Status"]["Code"]
-        reason = jsonObject["Head"]["Status"]["Reason"]
-        if (code != 12):
-            logErrorMessage("Code: " + str(code) + ", reason: " + reason)
+            if (code != 12):
+               logErrorMessage("Code: " + str(code) + ", reason: " + reason  )
+            return
+        except:
+            logErrorMessage("logErrorCode Status Code does not Exist: " + json.dumps(jsonObject))
+            return
 
-        return
+    def logErrorCode2(self, jsonObject):
+        try:
+            code = jsonObject["Body"]["Data"]["DeviceStatus"]["ErrorCode"]
 
+            if (code != 12):
+               logErrorMessage("logErrorCode2 Code: " + str(code) )
+            return
+        except:
+            logErrorMessage("logErrorCode2 Status Code does not Exist: " + json.dumps(jsonObject))
+            return
 
     def updateDeviceCurrent(self, jsonObject):
-
-        currentWatts = jsonObject["Body"]["Data"]["PAC"]["Value"]
-
-        Devices[1].Update(currentWatts, str(currentWatts), Images["FroniusInverter"].ID)
-
-        return
+        try:
+            currentWatts = jsonObject["Body"]["Data"]["PAC"]["Value"]
+            Devices[1].Update(currentWatts, str(currentWatts), Images["FroniusInverter"].ID)
+            self.currentWatts = currentWatts
+            return
+        except KeyError:
+            self.currentWatts = 0
+            logErrorMessage("updateDeviceCurrent value not available: " + json.dumps(jsonObject))
+            return
 
     def updateDeviceMeter(self, jsonObject):
-        totalWh = jsonObject["Body"]["Data"]["TOTAL_ENERGY"]["Value"]
-        currentWatts = jsonObject["Body"]["Data"]["PAC"]["Value"]
-
-        if (self.previousTotalWh < totalWh):
-            logDebugMessage("New total recieved: prev:" + str(self.previousTotalWh) + " - new:" + str(totalWh) + " - last faction: " + str(self.whFraction))
-            self.whFraction = 0
-            self.previousTotalWh = totalWh
-
-        else:
-            averageWatts =  (self.previousCurrentWatt + currentWatts) / 2
-            self.whFraction = self.whFraction + int(round(averageWatts / 60))
-            logDebugMessage("Fraction calculated: " + str(currentWatts) + " - " + str(self.whFraction))
-
-
-        self.previousCurrentWatt = currentWatts
-        calculatedWh = totalWh + self.whFraction
-        Devices[2].Update(0, str(currentWatts) + ";" + str(calculatedWh))
-
-        return
-
+        try:
+            totalWh = jsonObject["Body"]["Data"]["TOTAL_ENERGY"]["Value"]
+            #currentWatts = jsonObject["Body"]["Data"]["PAC"]["Value"]
+            currentWatts = self.currentWatts
+            Devices[2].Update(0, str(currentWatts) + ";" + str(totalWh))
+            self.totalWh = totalWh
+            return
+        except KeyError:
+            logErrorMessage("updateDeviceMeter value not available: " + json.dumps(jsonObject))
+            return
 
     def updateDeviceOff(self):
-
-        Devices[1].Update(0, "0", Images["FroniusInverterOff"].ID)
-        calculatedWh = self.previousTotalWh + self.whFraction
-        Devices[2].Update(0, "0;" + str(calculatedWh))
-
+        try:
+            Devices[1].Update(0, "0", Images["FroniusInverterOff"].ID)
+            totalWh = self.totalWh
+            Devices[2].Update(0, "0;" + str(totalWh))
+            return
+        except KeyError:
+            logErrorMessage("updateDeviceOff value not available: ")
+            return
 
     def onStop(self):
         logDebugMessage("onStop called")
