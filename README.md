@@ -1,27 +1,18 @@
-Not maintained anymore.
 -----------------------
 
 # domoticz-fronius-inverter-plugin
 Domoticz Fronius Inverter plugin
 --------------------------------
 
-This version of the plugin is running on my Domoticz 3.8799 sinds 2 feb 2018 now.
-It's not feature complete, but it's working, so I decided to share.
+This version of the plugin is running on my Domoticz 2023.1.
+Based on the great work of: Auke De Jong
 
 It creates 2 devices on the Utility page.
 One custom meter showing only the current generated Watts.
 The other is a kWh type meter
 
-The Fronius API only returns the generated kWhs as an integer.
-To make the graphs more fluent the plugin calculates the fractions by using the current Watts generated,
-until the intverter return one kWh more. Then the fraction part is reset and starts calculating again.
-
-Comparing the Fronius phone app with this plugin, there is a small difference. Acceptable for me.
-
-- Fronius app - Dommoticz plugin (kWh generated per day)
-- 10.4 - 10.692
-- 8.62 - 8.431
-- 5.72 - 5.859
+Modify inverter so it will stay awake during the night. 
+This can be done via the Fronisus portal.
 
 Installation
 ------------
@@ -54,9 +45,6 @@ Feature to add
 - Option the disable the fraction calculation feature
 - Detection of Fronius API version
 - Some things I can't remember now.
-
-I don't have much spare time, so this can take a while.
-
 
 This plugin uses an icon by 
 <a href="https://www.flaticon.com/authors/vectors-market" title="Vectors Market">
